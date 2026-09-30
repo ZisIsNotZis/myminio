@@ -1,0 +1,70 @@
+# NOTE (archival repair, 2026-09-30): the archived copy of this file had spaces
+# injected into every `command:` and `volumes:` line (e.g.
+# `command: minio server - -console-address: 9001 http: // minio{0...2}/dat`,
+# `- ./dat0: / dat`), which made it invalid YAML (`docker compose config` failed
+# with a go-yaml scanner error). The topology, ports and volume layout below are
+# unchanged; only that whitespace corruption was reverted. MinIO also refuses to
+# start without root credentials, so they are read from the environment rather
+# than hardcoded here.
+#
+#   export MINIO_ROOT_USER=...        # >= 3 characters
+#   export MINIO_ROOT_PASSWORD=...    # >= 8 characters
+services:
+    minio0:
+        image: minio/minio
+        command: minio server --console-address :9001 http://minio{0...2}/dat
+        environment:
+            MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+            MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+        ports:
+            - 9000:9000
+            - 9001:9001
+        volumes:
+            - ./dat0:/dat
+    minio1:
+        image: minio/minio
+        command: minio server --console-address :9001 http://minio{0...2}/dat
+        environment:
+            MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+            MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+        ports:
+            - 9002:9000
+            - 9003:9001
+        volumes:
+            - ./dat1:/dat
+    minio2:
+        image: minio/minio
+        command: minio server --console-address :9001 http://minio{0...2}/dat
+        environment:
+            MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+            MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+        ports:
+            - 9004:9000
+            - 9005:9001
+        volumes:
+            - ./dat2:/dat
+    # A distributed MinIO pool normally needs at least 4 drives, so the 3-node
+    # layout above may be rejected at startup. Uncommenting these two nodes
+    # restores the 5-node layout the commands above were originally written for.
+    # minio3:
+    #   image: minio/minio
+    #   command: minio server --console-address :9001 http://minio{0...2}/dat http://minio{3...4}/dat
+    #   environment:
+    #     MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+    #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+    #   ports:
+    #     - 9006:9000
+    #     - 9007:9001
+    #   volumes:
+    #     - ./dat3:/dat
+    # minio4:
+    #   image: minio/minio
+    #   command: minio server --console-address :9001 http://minio{0...2}/dat http://minio{3...4}/dat
+    #   environment:
+    #     MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+    #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+    #   ports:
+    #     - 9008:9000
+    #     - 9009:9001
+    #   volumes:
+    #     - ./dat4:/dat

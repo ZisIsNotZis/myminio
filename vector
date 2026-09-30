@@ -1,0 +1,25 @@
+import numpy as np
+
+def vec(f, _=(), type='f'):	
+	try:
+		return np.memmap(f, type)
+	except:
+		a = np.memmap(f, type, 'w+', shape=max(int(len(_)*1.5), 256))
+		a[:len(_)] = _
+		return a[:len(_)]
+
+def append(a, _):
+	if a.nbytes + a.itemsize >= a._mmap.size():
+		a._mmap.resize(int(len(a)*1.5)*a.itemsize)
+		t = np.frombuffer(a, like=a).view(np.memmap)
+		t._mmap = a._mmap
+		a = t[:len(a)]
+	print(a.shape, a.base.shape)
+	a = a.base[:len(a)+1]
+	a[-1] = _
+	return a
+
+a = vec('a', [1,2,3])
+print(a)
+a = append(a, 4)
+print(a)
