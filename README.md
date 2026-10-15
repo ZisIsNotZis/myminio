@@ -22,10 +22,7 @@ The erasure-coding core (`ec4.py`) is verified working (see
 [`docs/project-status.md`](docs/project-status.md)); the HTTP layer around it is only
 partially working. Kept for reference.
 
-**License note:** There is no `LICENSE` file and no copyright header in any source
-file, so **no license has been granted** — default "all rights reserved". If this is
-published, the owner must add an explicit license (or a deliberate all-rights-reserved
-notice); do not assume a permissive default.
+**License:** GNU AGPL v3 (see [`LICENSE`](LICENSE)).
 
 ---
 

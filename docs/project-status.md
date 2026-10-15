@@ -10,8 +10,8 @@ direct predecessor of `myminio2`. Copied — the original was not modified.
 
 Archive — not maintained. The erasure-coding core (`ec4.py`) is functional and was
 verified during migration; the HTTP layer over it (`s3svr.py`) only partially works
-(two routes raise). Not production, no tests in the archive, no packaging, no
-license.
+(two routes raise). Not production, no tests in the archive, no packaging;
+licensed under GNU AGPL v3 (`LICENSE`).
 
 ## Evidence
 
@@ -60,4 +60,4 @@ across HTTP backends is what `myminio2` does). The `docker-compose.yml` deploys 
 MinIO and is unrelated to the Python code; its 3-node distributed layout may be
 rejected at startup because MinIO wants at least 4 drives. `vector.py` and `ec6.py`
 are scratch files that currently crash. Any credentials/datasets found during
-migration were dropped, not carried over. No license granted.
+migration were dropped, not carried over. Licensed under GNU AGPL v3 (`LICENSE`).

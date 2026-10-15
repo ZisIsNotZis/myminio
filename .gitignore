@@ -5,9 +5,12 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
+.pi/
 
 # Local environment / secrets for docker-compose.yml
 .env
+.env.*
+!.env.example
 
 # Runtime data directories bind-mounted by docker-compose.yml
 dat0/
