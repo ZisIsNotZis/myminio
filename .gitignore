@@ -5,7 +5,12 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
-.pi/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*~
 
 # Local environment / secrets for docker-compose.yml
 .env
