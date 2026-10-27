@@ -17,8 +17,9 @@ licensed under GNU AGPL v3 (`LICENSE`).
 
 - Source: `~/my/myminio` (private archive), copied verbatim with
   `rsync -a --exclude=.git --exclude=__pycache__ --exclude=*.pyc --exclude=.venv`.
-  Nothing was dropped: all 11 archived files are present, including the two scratch
-  `memmap` blobs `a` and `vector` (byte-identical to the originals by MD5).
+  Every source, doc and test file remains. During the public-facing polish the two
+  scratch artifacts were removed: `a` (a generated `memmap` data blob) and `vector`
+  (a stray duplicate of an earlier `vector.py`).
 - Erasure coding verified with NumPy 2.x / Python 3.12 by driving `ec4.EC` against
   three temporary directories:
   - RAID-5 (`chk=1`) writes 2 data + 1 parity shard and round-trips payloads that
