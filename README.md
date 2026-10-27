@@ -145,7 +145,7 @@ The code is a ladder: each `ec*.py` is a self-contained stage of the same idea. 
 
 ## How to contribute
 
-This repository is an archive, not an actively maintained project, so feature pull requests are unlikely to be merged. Corrections to the docs, the archival evidence, or a failing check on a newer NumPy are welcome as issues. If you want the same idea taken further, see `myminio2`.
+This repository is an archive, not an actively maintained project, so feature pull requests are unlikely to be merged. Corrections to the docs, the archival evidence, or a failing check on a newer NumPy are welcome as issues. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for scope, the local check and PR expectations. If you want the same idea taken further, see `myminio2`.
 
 ## Roadmap
 
