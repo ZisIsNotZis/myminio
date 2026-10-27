@@ -10,8 +10,9 @@ direct predecessor of `myminio2`. Copied — the original was not modified.
 
 Archive — not maintained. The erasure-coding core (`ec4.py`) is functional and was
 verified during migration; the HTTP layer over it (`s3svr.py`) only partially works
-(two routes raise). Not production, no tests in the archive, no packaging;
-licensed under GNU AGPL v3 (`LICENSE`).
+(two routes raise). Not production, no maintained test suite (`tests/smoke_ec.py`
+is archival verification, not CI), no packaging; licensed under GNU AGPL v3
+(`LICENSE`).
 
 ## Evidence
 
