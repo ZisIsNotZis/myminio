@@ -1,213 +1,176 @@
-# myminio — a hand-rolled object store, first generation
+<p align="center">
+  <img src="assets/logo.svg" width="112" alt="myminio logo">
+</p>
 
-**Title:** myminio
+<h1 align="center">myminio</h1>
 
-**One-line what:** A from-scratch, dependency-light object-storage experiment that
-implements XOR erasure coding (RAID-5 and RAID-0) over plain local directories,
-plus per-directory quota accounting, quota-aware placement, timestamped versioning
-with point-in-time reads, on-read shard repair and a health scan — behind a minimal
-Flask `/obj` REST API.
+<p align="center"><strong>A hand-rolled object store for people who want to see the inside.</strong></p>
 
-**Why it exists / what problem it solves:** To have a small private object store
-whose internals are understood rather than trusted. The archived material starts
-from a `docker-compose.yml` that stands up a real distributed MinIO cluster, and
-then reimplements the interesting core of such a system by hand — sharding a blob,
-computing an XOR parity shard, choosing where shards go based on free space,
-keeping versions, rebuilding a lost shard on read — without depending on MinIO,
-`boto3` or any S3 server framework. It is the predecessor of
-`myminio2`, where the same idea was carried over the network.
+<p align="center"><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
 
-**Status:** archive — first-generation prototype, not production, not maintained.
-The erasure-coding core (`ec4.py`) is verified working (see
-[`docs/project-status.md`](docs/project-status.md)); the HTTP layer around it is only
-partially working. Kept for reference.
+Split a blob into shards across ordinary directories, add one XOR parity shard, keep every version, and rebuild a lost shard on the next read — in about 600 lines of Python and NumPy.
 
-**License:** GNU AGPL v3 (see [`LICENSE`](LICENSE)).
+> **Status: archive, first generation.** The erasure-coding core (`ec4.py`) is verified by `tests/smoke_ec.py`; the Flask API around it only partly works. This is **not** S3-compatible, not production software, and not maintained. It is kept as a readable reference and as the direct predecessor of `myminio2`.
 
----
+## Quick start
 
-## How to run
-
-The repository contains **two independent things that do not talk to each other**:
-
-1. `docker-compose.yml` — a stock MinIO cluster (upstream image), and
-2. the hand-rolled Python store — `s3svr.py` + `ec4.py` — which runs on local
-   directories and never contacts the MinIO containers.
-
-### Part 1 — the MinIO cluster from `docker-compose.yml`
-
-The archived copy of this file had spaces injected into every `command:` and
-`volumes:` line, so it was not valid YAML. That corruption has been reverted
-(topology, ports and volume layout are unchanged) and MinIO's required root
-credentials are now read from the environment. See
-[`docs/project-status.md`](docs/project-status.md) for the original broken lines.
-
-```bash
-export MINIO_ROOT_USER=myminio                       # placeholder, >= 3 chars
-export MINIO_ROOT_PASSWORD=replace-with-a-real-value # placeholder, >= 8 chars
-
-mkdir -p dat0 dat1 dat2                        # bind-mount sources
-docker compose config                          # validate
-docker compose up -d
-docker compose ps
-# S3 API:   localhost:9000 (node0), localhost:9002 (node1), localhost:9004 (node2)
-# Console:  localhost:9001, localhost:9003, localhost:9005
-docker compose down
-```
-
-Ports and volume layout (unchanged from the archive):
-
-| service | S3 API (host) | console (host) | volume        |
-| ------- | ------------- | -------------- | ------------- |
-| minio0  | 9000          | 9001           | `./dat0:/dat` |
-| minio1  | 9002          | 9003           | `./dat1:/dat` |
-| minio2  | 9004          | 9005           | `./dat2:/dat` |
-
-Caveats, honestly stated: this was **not runtime-verified** during archival (the
-image could not be pulled here), and a distributed MinIO pool normally requires at
-least 4 drives, so the 3-node layout may be rejected at startup — the commented
-`minio3`/`minio4` blocks restore the 5-node layout the commands were written for.
-
-### Part 2 — the hand-rolled store
-
-Each command-line argument is `<directory>/<quota-in-bytes>`. The directories must
-already exist; the quota is decremented by the size of any data already inside.
+The verified path is the Python library. It needs Python 3 and NumPy; Flask is only needed for the HTTP layer.
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install numpy flask
 
 mkdir -p dat0 dat1 dat2
-python s3svr.py ./dat0/1000000 ./dat1/1000000 ./dat2/1000000
-# -> serves on localhost:5000 (Flask's default; s3svr.py calls Flask.run() with no args)
-```
 
-The HTTP surface (all bespoke — this is **not** the S3 API):
-
-| route                     | method | behaviour                                                        |
-| ------------------------- | ------ | ---------------------------------------------------------------- |
-| `/obj`                    | GET    | JSON list of object keys                                          |
-| `/obj/<k>`                | GET    | JSON list of version timestamps for `k`                           |
-| `/obj/<k>/<t>`            | GET    | bytes of the newest version with timestamp `< t` (point-in-time)  |
-| `/obj/<k>/<t>`            | POST   | store the request body as version `t` (**striped only**, no parity) |
-| `/obj/<k>/<t>`            | PUT    | snapshot — **broken**, `ec4.EC` has no `snap` method → HTTP 500   |
-| `/obj/<k>/<t>`            | DELETE | delete versions with timestamp `< t`                              |
-| `/objs`                   | GET    | health scan — **broken**, returns a bare `int` → HTTP 500          |
-| `/ec`                     | GET    | JSON map of directory → remaining quota                           |
-
-To use the erasure-coding core directly (this is where RAID-5 is actually reachable
-— the HTTP `POST` route never passes `chk`):
-
-```python
+python3 - <<'PY'
 import numpy as np
 from ec4 import EC
 
-ec = EC({f'./dat{i}/': 10**9 for i in range(3)})   # dir -> free bytes
-ec.set('k', np.frombuffer(b'payload', 'B'), t=1000, chk=1)   # chk=1 -> RAID-5
-data = np.concatenate(ec.get('k', chk=1))                     # rebuilds 1 lost shard
+ec = EC({f'./dat{i}/': 10**9 for i in range(3)})   # shard directory -> free bytes
+ec.set('greeting', np.frombuffer(b'hello, shards', 'B'), t=1, chk=1)
+
+print(np.concatenate(ec.get('greeting', chk=1)).tobytes())
+# b'hello, shards'
+PY
 ```
 
-## Implemented vs not
+`chk=1` writes RAID-5: two data shards plus one XOR parity shard. Delete one data shard under `dat0/`–`dat2/`, read again with `chk=1`, and the shard is reconstructed and written back in place.
 
-Verified in this repository by `tests/smoke_ec.py` (Python 3.12, NumPy 2.x) unless
-marked otherwise.
+Run the verification (NumPy only, uses a temporary directory):
 
-**Implemented**
+```bash
+python3 tests/smoke_ec.py
+```
 
-- XOR erasure coding over local directories: **RAID-5** (n data shards + 1 XOR
-  parity, tolerates one lost shard) and **RAID-0** (`chk=0`, striping only, no
-  redundancy) — `ec4.py:104` `split`, `ec4.py:122` `cat`.
-- On-read reconstruction and **in-place repair** of a missing shard, plus
-  shard-mismatch detection — `ec4.py:54` `get`, `ec4.py:122` `cat`.
-- Timestamped versions (`<unix-ts> <n> <i>` filenames), point-in-time reads
-  ("newest version older than `t`") and version-filtered deletion — `ec4.py:51`
-  `stat`, `ec4.py:68` `set`, `ec4.py:80` `rm`.
-- Per-directory quota accounting and quota-aware placement (writes to the
-  directory with the most free bytes) — `ec4.py:40` `EC.__init__`, `ec4.py:68` `set`.
-- Global health scan with an error counter — `ec4.py:90` `gets`.
-- In-memory, array-level XOR coding experiments: `ec5.py` runs; `ec6.py` is a
-  variant that currently crashes on a shape mismatch.
-- A minimal Flask REST wrapper over `ec4` — `s3svr.py`.
-- A three-node MinIO topology in `docker-compose.yml`.
+To start the partial HTTP façade, pass each directory with its quota in bytes:
 
-**Not implemented**
+```bash
+python3 s3svr.py ./dat0/1000000 ./dat1/1000000 ./dat2/1000000
+# Flask serves http://localhost:5000
+```
 
-- **Not S3-compatible.** No authentication at all (no AWS SigV4), no buckets, no
-  `ListObjects` XML, no multipart upload, no presigned URLs, no ACL/policy/
-  lifecycle/object-lock, no range GETs, no ETags or conditional requests. The API
-  is the bespoke `/obj/...` surface above. The name `myminio` describes the
-  *intent*, not protocol compliance.
-- **No replication of any kind** (no mirroring, no multi-copy, no quorum). The only
-  redundancy is single-parity XOR, which tolerates exactly one shard loss.
-- **No network distribution in the hand-rolled store.** Shards are local filesystem
-  paths handled by one process; there is no node, gossip, consensus or failover
-  layer. Moving the shards across HTTP backends is exactly what `myminio2` does.
-- **No snapshot support**, despite the `[x] snapshot` checklist entry in `ec4.py:35`
-  and the `PUT` route calling it: `ec4.EC.snap` does not exist, and the related
-  `EC.ln` (`ec4.py:95`) calls an unimported `os.link`.
-- **No HTTP error handling**: a missing object or a bad version yields HTTP 500, not
-  404; `/objs` returns a bare `int` and cannot be serialised as a response.
-- **No tests, packaging, configuration or CI in the archive.** The only test file
-  (`tests/smoke_ec.py`) was added during archival to reproduce the verification in
-  this document; it is archive evidence, not a maintained suite.
-- `vector.py` (a growable `mmap`-backed `ndarray`) crashes on current NumPy with
-  `BufferError: mmap can't resize with extant buffers exported`. It and `ec6.py`
-  are scratch files, not part of the runnable path.
+## What it can do now
 
-## Erasure coding / replication: this generation vs `myminio2`
+| Capability | Where |
+| --- | --- |
+| **RAID-5 XOR erasure coding** — *n* data shards + 1 parity, tolerates one lost shard | `ec4.split`, `ec4.cat` |
+| **RAID-0 striping** — no parity (`chk=0`, the default) | `ec4.split`, `ec4.cat` |
+| **Timestamped versions** and point-in-time reads (“newest version older than *t*”) | `ec4.set`, `ec4.get` |
+| **Version-filtered deletion** | `ec4.rm` |
+| **Quota accounting** per directory and quota-aware shard placement | `ec4.EC.__init__`, `ec4.set` |
+| **Self-healing reads** — rebuild a missing shard and repair it in place | `ec4.cat` |
+| **Health scan** over every object, with an error counter | `ec4.gets` |
+| **Bespoke Flask API** over the core, intentionally not S3 | `s3svr.py` |
+| **Three-node MinIO compose file**, independent of the Python code | `docker-compose.yml` |
+| **In-memory XOR experiments** — `ec5.py` runs; `ec6.py` crashes on a shape mismatch | `ec5.py`, `ec6.py` |
 
-| | this repo (`myminio`) | `myminio2` |
+### The HTTP surface
+
+The API is a small, incomplete wrapper — it is not the S3 protocol.
+
+| Route | Method | What happens |
 | --- | --- | --- |
-| XOR erasure coding | yes — RAID-5 + RAID-0, the bigger of the two implementations | yes — fixed 2 data + 1 parity per blob |
-| versioning / point-in-time reads | yes | no |
-| quota + placement policy | yes | no |
-| on-read repair + health scan | yes | rebuild-from-parity, no scan |
-| shards live on | local directories, one process | three HTTP backends behind a gateway |
-| transport | Flask route decorators | custom `asyncio` HTTP/1.1 server, raw sockets |
-| replication | **no** | **no** |
+| `/obj` | GET | JSON list of object keys |
+| `/obj/<k>` | GET | JSON list of version timestamps for `k` |
+| `/obj/<k>/<t>` | GET | bytes of the newest version older than `t` |
+| `/obj/<k>/<t>` | POST | store the request body as version `t` (always RAID-0) |
+| `/obj/<k>/<t>` | PUT | **broken** — calls the missing `EC.snap` → HTTP 500 |
+| `/obj/<k>/<t>` | DELETE | delete versions older than `t` |
+| `/objs` | GET | **broken** — returns a bare `int` → HTTP 500 |
+| `/ec` | GET | JSON map of directory → remaining quota |
 
-So: **erasure coding is present in this generation and is more developed than in
-`myminio2`; replication is absent from both.** What `myminio2` adds is the network
-split (custom socket server + gateway) and higher-performance file I/O, not
-redundancy beyond single parity.
+There is no authentication, no buckets, no multipart upload, no range GETs, no ETags and no error mapping: a missing object yields HTTP 500, not 404.
 
-## Distinguishing this from `myminio2`
+### What is not here
 
-`myminio2` is the second pass. This repository is the first generation and the
-relationship is visible in the code: here the sharding/parity logic is an array of
-small `EC` classes (`ec.py` → `ec2.py` → `ec3.py` → `ec4.py`) that write shard files
-into local directories, with a thin Flask façade in `s3svr.py`. `myminio2` keeps only
-the final shape of that idea and rewrites the transport by hand (`mysock.py`,
-`myhttp.py`, `mysvr.py`, `myminios.py`) so the shards are spread across three HTTP
-backends. `myminio2` has no `docker-compose.yml`, no Flask and no versioning; this
-repository has a real MinIO cluster compose file that the Python code never uses.
+- **No S3 compatibility.** The name describes the intent, not protocol compliance.
+- **No replication.** The only redundancy is single-parity XOR; it survives exactly one lost shard.
+- **No network distribution.** Shards are local files in one process. Spreading them over HTTP backends is what `myminio2` does.
+- **No snapshots.** The `[x] snapshot` checklist entry and the `PUT` route promise a method that was never written.
+- **No packaging, configuration system or maintained test suite.** `tests/smoke_ec.py` is archival evidence, not CI.
 
-## Repository layout
+## Architecture
 
-| path | lines | what |
-| --- | --- | --- |
+A stored object is a set of shard files named `<unix-ts> <data-shards> <index>` inside one directory per shard store:
+
+```text
+dat0/greeting/1 2 0   # data shard 0
+dat1/greeting/1 2 1   # data shard 1
+dat2/greeting/1 2 2   # XOR parity shard
+```
+
+**Write path.** Pad the payload to a whole number of shards, split it into *n* data shards, XOR those shards into a parity shard when `chk=1`, order the directories by remaining quota, then write one shard per directory and decrement each quota.
+
+**Read path.** Pick the newest version older than the requested timestamp, load the shards by index, and reconstruct a missing shard from the remaining data shards plus parity. The reconstruction is written back to disk. Finally the data shards are concatenated; with `chk=0` there is no parity and therefore no repair.
+
+The shard stores are plain local directories, so the whole thing is inspectable with `ls`, `sha1sum` and a text editor — which is the point.
+
+### The separate MinIO cluster
+
+`docker-compose.yml` stands up stock MinIO and is **not used by the Python code**. It needs root credentials from the environment, and a distributed MinIO pool normally wants at least four drives, so the three-node layout may be rejected at startup; the commented `minio3`/`minio4` blocks restore the five-node layout the commands were written for.
+
+```bash
+export MINIO_ROOT_USER=myminio
+export MINIO_ROOT_PASSWORD=replace-with-a-real-value
+mkdir -p dat0 dat1 dat2
+docker compose up -d        # S3 API on :9000, :9002, :9004
+```
+
+### Repository layout
+
+| Path | Lines | What |
+| --- | ---: | --- |
 | [`ec.py`](ec.py) | 69 | first cut: `EC(list)`, XOR parity, `write/read/list/remove` |
 | [`ec2.py`](ec2.py) | 139 | adds `split_xor`/`xor` helpers and timestamped versions |
 | [`ec3.py`](ec3.py) | 92 | switches to `EC(dict)` (dir → free bytes) and quota-aware placement |
 | [`ec4.py`](ec4.py) | 148 | the mature cut: RAID-5 + RAID-0, versioning, quota, health scan, error counter |
 | [`ec5.py`](ec5.py) | 47 | in-memory array-level XOR coding (runs on import) |
-| [`ec6.py`](ec6.py) | 41 | variant of `ec5.py`; crashes on shape mismatch |
+| [`ec6.py`](ec6.py) | 41 | variant of `ec5.py`; crashes on a shape mismatch |
 | [`s3svr.py`](s3svr.py) | 55 | Flask `/obj` REST wrapper around `ec4` |
 | [`vector.py`](vector.py) | 34 | scratch growable `mmap` array; crashes on current NumPy |
-| [`vector`](vector), [`a`](a) | — | scratch `memmap` data blobs left by the scripts above |
 | [`docker-compose.yml`](docker-compose.yml) | 70 | three-node stock MinIO cluster (repaired YAML) |
-| [`tests/smoke_ec.py`](tests/smoke_ec.py) | — | archival verification (added during migration) |
-| [`docs/project-status.md`](docs/project-status.md) | — | classification / status / evidence / boundaries |
+| [`tests/smoke_ec.py`](tests/smoke_ec.py) | 117 | archival verification of the `ec4` claims above |
+| [`docs/project-status.md`](docs/project-status.md) | — | classification, evidence and boundaries |
 
-625 lines of Python across the eight `.py` files of the archive (549 non-blank;
-`tests/` excluded).
+## How to develop
 
-## Reproducing the verification
+There is no build step and no package to install. NumPy is the only dependency for the core; Flask is needed only by `s3svr.py`.
 
 ```bash
-python3 tests/smoke_ec.py      # needs numpy; exits non-zero on failure
+pip install numpy flask     # inside a virtualenv
+python3 tests/smoke_ec.py   # exercises RAID-5, RAID-0, versions, repair, mismatch detection
 ```
 
-It checks the RAID-5 and RAID-0 round-trips (divisible and indivisible payloads),
-rebuild after a lost shard, versioning / point-in-time reads / version deletion, and
-shard-mismatch detection — all inside a temporary directory.
+The code is a ladder: each `ec*.py` is a self-contained stage of the same idea. When changing the core, keep `ec4.py` runnable and re-run the smoke check. `vector.py`, `ec5.py` and `ec6.py` are scratch experiments and are not part of the runnable path.
+
+## How to contribute
+
+This repository is an archive, not an actively maintained project, so feature pull requests are unlikely to be merged. Corrections to the docs, the archival evidence, or a failing check on a newer NumPy are welcome as issues. If you want the same idea taken further, see `myminio2`.
+
+## Roadmap
+
+### Implemented
+
+- XOR erasure coding: RAID-5 (one parity shard) and RAID-0 (striping only).
+- Version history, point-in-time reads, and version-filtered deletion.
+- Per-directory quotas and quota-aware placement.
+- On-read reconstruction with in-place repair, plus shard-mismatch detection.
+- Global health scan and error counter.
+- In-memory XOR experiments and a partial Flask API.
+- A repaired three-node MinIO compose file for comparison.
+
+### Planned (not in this archive)
+
+- Implement the missing `EC.snap` and `EC.ln`, or remove the routes and checklist entries that promise them.
+- Give the HTTP layer real status codes (404 for missing keys, 400 for bad timestamps) and make `/objs` return JSON.
+- Expose `chk` through `POST /obj/<k>/<t>` so the API can actually write RAID-5.
+- Replace the scratch experiments with a small, maintained suite and a package layout.
+- Move shards behind HTTP backends — carried out in `myminio2`.
+
+### Future vision
+
+`myminio` is a learning ladder: enough of an object store to make erasure coding, versioning, placement and repair concrete, with nothing hidden behind a framework. The next generation already exists in `myminio2`, where the same shard/parity idea is split across HTTP backends. If this code is revived, the useful direction is correctness and observability — a truthful HTTP layer, a real test suite, and shard movement over the network — not S3 feature parity.
+
+## License
+
+GNU Affero General Public License v3.0 only. See [`LICENSE`](LICENSE).

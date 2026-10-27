@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="title">
+  <title id="title">myminio — XOR-coded shards</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="shard" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <rect x="20" y="30" width="58" height="14" rx="7" fill="url(#shard)"/>
+  <rect x="20" y="52" width="58" height="14" rx="7" fill="url(#shard)" opacity=".8"/>
+  <rect x="20" y="74" width="58" height="14" rx="7" fill="url(#shard)" opacity=".6"/>
+  <circle cx="100" cy="84" r="16" fill="#0f172a" stroke="#fbbf24" stroke-width="5"/>
+  <path d="M92 76l16 16M108 76l-16 16" stroke="#fbbf24" stroke-width="5" stroke-linecap="round"/>
+</svg>
